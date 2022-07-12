@@ -52,11 +52,24 @@ class ApplicationController extends Controller
             $file->storeAs('attachment/'.$hashAuthID, $incrementFilename['filename']);
         }
 
+        if($request->base64Image) {
+            // remove the part that we don't need from the provided image and decode it
+            $imgdata = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $request->base64Image));
+            $filename='cedulaAttach_'.date('m-d-Y_hia').'base64.png';
+
+            $filepath = "attachment/".$filename;
+
+            // Save the image in a defined path
+            file_put_contents($filepath, $imgdata);
+            $attachmentFile = '/'.$filename;
+        }
+
+        $attachFile = $request->hasFile('file') ? $incrementFilename['path'] : ($request->base64Image? $attachmentFile : '');
         $drequest = Application::create([
             'user_id' => Auth::id(),
             'type' => (int)$request->type,
             'status' => 1,
-            'attachment' => $request->hasFile('file') ? $incrementFilename['path'] : '',
+            'attachment' => $attachFile,
             'purpose' => $request->purpose
         ]);
 

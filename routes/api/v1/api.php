@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\User;
 use App\Http\Controllers\v1\AuthController;
 use App\Http\Controllers\v1\UserController;
 use App\Http\Controllers\v1\ResidentController;
@@ -9,14 +10,42 @@ use App\Http\Controllers\v1\ApplicationController;
 use App\Http\Controllers\v1\AdminController;
 use App\Http\Controllers\v1\PublicController;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+    // return $request->user();
+    $user = User::with('resident')->where('id', Auth::id())->get();
+    return $user[0];
 });
+
+/*Route::post('/sanctum/token', function (Request $request) {
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required',
+        'device_name' => 'required',
+    ]);
+
+    $user = User::where('email', $request->email)->first();
+
+    if (!$user || ! Hash::check($request->password, $user->password)) {
+        throw ValidationException::withMessages([
+            'email' => ['Invalid credentials.'],
+        ]);
+    }
+
+    $token = $user->createToken($request->device_name)->plainTextToken;
+    return response()->json(['access_token' => $token, 'token_type' => 'Bearer', ]);
+});*/
 
 Route::post('/register', [UserController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout']);
+Route::post('/generateOTP', [UserController::class, 'generateOTP']);
+Route::post('/confirmOTP', [UserController::class, 'confirmOTP']);
+Route::post('/resetPassword', [UserController::class, 'resetPassword']);
+
+Route::post('/appLogin', [AuthController::class, 'appLogin']);
+Route::post('/appLogout', [AuthController::class, 'appLogout']);
 
 Route::get('/getOfficialList', [PublicController::class, 'getOfficialList']);
 Route::get('/getEventAnnouncementList', [PublicController::class, 'getEventAnnouncementList']);
@@ -64,4 +93,13 @@ Route::middleware('auth:sanctum')->group( function() {
     Route::post('/singleEA/{id}', [AdminController::class, 'singleEA']);
     Route::post('/deleteAnnouncement', [AdminController::class, 'deleteAnnouncement']);
     Route::post('/hideUnhideAnnouncement', [AdminController::class, 'hideUnhideAnnouncement']);
+
+    Route::post('/sendingSms', [AdminController::class, 'sendingSms']);
+    Route::get('/displayOutgoing', [AdminController::class, 'displayOutgoing']);
+    Route::post('/residentListFilter', [AdminController::class, 'residentListFilter']);
+    Route::post('/requestListFilter', [AdminController::class, 'requestListFilter']);
+
+    Route::post('/residentSearch', [AdminController::class, 'residentSearch']);
+
+    Route::get('/getNameList', [ResidentController::class, 'getNameList']);
 });

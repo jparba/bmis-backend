@@ -9,12 +9,14 @@ use App\Application;
 use App\Official;
 use App\Announcement;
 use App\Http\Requests\StoreNewResident;
+use App\Traits\Itexmo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
 use Hashids\Hashids;
 
 class AdminController extends Controller {
+    // use Itexmo;
 
     public function residentList() {
         $resident = Resident::with('user')->orderBy('created_at', 'desc')->get();
@@ -29,22 +31,22 @@ class AdminController extends Controller {
     public function newResident(StoreNewResident $request) {
         $hashids_authID = new Hashids('', 10);
 
-        try {
+        // try {
             $caddress = $request->cpurok.'/'.$request->cstreet.'/'.$request->ccity.'/'.$request->cprovince;
             $paddress = $request->ppurok.'/'.$request->pstreet.'/'.$request->pcity.'/'.$request->pprovince;
             $data = [
-                'user_id'=> $request->user_id,
+                // 'user_id'=> $request->user_id,
                 'brgy_id'=> $this->brgyID(),
                 'firstname'=> $request->firstname,
                 'middlename'=> $request->middlename,
                 'lastname'=> $request->lastname,
+                'name_extension'=> $request->name_extension,
                 'phone'=> $request->phone,
                 'email'=> $request->email,
                 'dob'=> $request->bdate,
+                'age'=> is_nan($request->age) || $request->age < 0? 0 : $request->age,
                 'pob'=> $request->pob,
                 'gender'=> $request->gender,
-                'weight'=> $request->weight,
-                'height'=> $request->height,
                 'religion'=> $request->religion,
                 'blood_type'=> $request->bloodtype,
                 'occupation'=> $request->occupation,
@@ -79,14 +81,14 @@ class AdminController extends Controller {
             Resident::create($data);
 
             return response()->json(['success' => true, 'message' => 'Resident added successfully']);
-        } catch (\Exception $e) {
+        // } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Adding resident failed']);
-        }
+        // }
     }
 
     public function updateResident(StoreNewResident $request) {
         $hashids_authID = new Hashids('', 10);
-        try {
+        // try {
             $caddress = $request->cpurok.'/'.$request->cstreet.'/'.$request->ccity.'/'.$request->cprovince;
             $paddress = $request->ppurok.'/'.$request->pstreet.'/'.$request->pcity.'/'.$request->pprovince;
             $data = [
@@ -95,13 +97,13 @@ class AdminController extends Controller {
                 'firstname'=> $request->firstname,
                 'middlename'=> $request->middlename,
                 'lastname'=> $request->lastname,
+                'name_extension'=> $request->name_extension,
                 'phone'=> $request->phone,
                 'email'=> $request->email,
                 'dob'=> $request->bdate,
+                'age'=> is_nan((int)$request->age) || (int)$request->age < 0? 0 : (int)$request->age,
                 'pob'=> $request->pob,
                 'gender'=> $request->gender,
-                'weight'=> $request->weight,
-                'height'=> $request->height,
                 'religion'=> $request->religion,
                 'blood_type'=> $request->bloodtype,
                 'occupation'=> $request->occupation,
@@ -126,7 +128,7 @@ class AdminController extends Controller {
 
                 if (!File::exists($folder)) { File::makeDirectory($folder, 0775, true, true); }
 
-                $incrementFilename = $this->incrementFilename($path, $request->id);
+                $incrementFilename = $this->incrementFilename($path, '');
 
                 // save the file to directory
                 $file->storeAs('accounts/', $incrementFilename['filename']);
@@ -137,24 +139,24 @@ class AdminController extends Controller {
 
             if(!empty($request->user_id)) {
                 User::where('id', $request->user_id)
-                       ->update([
-                           'firstname' => $request->firstname,
-                           'middlename' => $request->middlename,
-                           'lastname' => $request->lastname,
-                           'email' => $request->email,
-                           'phone' => $request->phone,
-                           'pic' => $request->pic
-                        ]);
+                   ->update([
+                       'firstname' => $request->firstname,
+                       'middlename' => $request->middlename,
+                       'lastname' => $request->lastname,
+                       'email' => $request->email,
+                       'phone' => $request->phone,
+                       'pic' => $request->hasFile('file')? $data['pic'] : $request->pic
+                    ]);
             }
 
-            return response()->json(['success' => true, 'message' => 'Resident updated successfully']);
-        } catch (\Exception $e) {
+            return response()->json(['success' => true, 'data' => $data, 'message' => 'Resident updated successfully']);
+        // } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Updating resident failed']);
-        }
+        // }
     }
 
     public function userList() {
-        $user = User::where('role', 'user')->orderBy('created_at', 'desc')->get();
+        $user = User::with('resident')->where('role', 'user')->orderBy('created_at', 'desc')->get();
         return response()->json($user, 200);
     }
 
@@ -165,6 +167,9 @@ class AdminController extends Controller {
 
     public function updateStatusRequest(Request $request) {
         Application::where('id', $request->id)->update(['status' => $request->status]);
+        $user = Application::with('user')->where('id', $request->id)->first();
+        $status = $request->status == 3 ? 'request was rejected' : 'request was approved';
+        $smsapi = $this->sendSMS($user['user']['phone'], 'Hello '.$user['user']['firstname'].' '.$user['user']['lastname'].' your '.$status);
         $data = [
             'index' => $request->index,
             'status' => $request->status,
@@ -196,7 +201,7 @@ class AdminController extends Controller {
             $user = User::where('id', (int)$request->id)->get();
             DB::transaction(function () use($request, &$user, &$mStatus) {
                 User::where('id', (int)$request->id)->update(['status' => $request->status]);
-                $smsapi = $this->sendsms($user[0]['phone'], 'Hello '.$user[0]['firstname'].' '.$user[0]['lastname'].' your BMIS account was '.$mStatus['success'][$request->status]).'.';
+                $smsapi = $this->sendSMS($user[0]['phone'], 'Hello '.$user[0]['firstname'].' '.$user[0]['lastname'].' your BMIS account was '.$mStatus['success'][$request->status]).'.';
             });
 
             return response()->json(['success' => true, 'message' => 'User '.$mStatus['success'][$request->status].' successfully']);
@@ -223,11 +228,12 @@ class AdminController extends Controller {
 
     public function newOfficial(Request $request) {
         $hashids_authID = new Hashids('', 10);
-        try {
+        // try {
             $data = [
                 'firstname'=> $request->firstname,
                 'middlename'=> $request->middlename,
                 'lastname'=> $request->lastname,
+                'name_extension'=> $request->name_extension,
                 'gender'=> $request->gender,
                 'birthdate'=> $request->bdate,
                 'position'=> $request->position,
@@ -274,9 +280,9 @@ class AdminController extends Controller {
             Official::create($data);
 
             return response()->json(['success' => true, 'message' => 'Official added successfully']);
-        } catch (\Exception $e) {
+        // } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Adding official failed']);
-        }
+        // }
     }
 
     public function updateOfficial(Request $request) {
@@ -286,6 +292,7 @@ class AdminController extends Controller {
                 'firstname'=> $request->firstname,
                 'middlename'=> $request->middlename,
                 'lastname'=> $request->lastname,
+                'name_extension'=> $request->name_extension,
                 'gender'=> $request->gender,
                 'birthdate'=> $request->bdate,
                 'phone'=> $request->phone,
@@ -365,7 +372,7 @@ class AdminController extends Controller {
                 Announcement::create($data);
 
                 foreach ($users as $user) {
-                    $smsapi = $this->sendsms($user['phone'], $data['sms']);
+                    $smsapi = $this->sendSMS($user['phone'], $data['sms']);
                 }
             });
 
@@ -406,28 +413,157 @@ class AdminController extends Controller {
     }
 
     public function hideUnhideAnnouncement(Request $request) {
-        // try {
+        try {
             Announcement::where('id', $request->id)->update([
                'hidden' => $request->value == '1' ? 0 : 1
            ]);
             return response()->json(['success' => true, 'message' => $request->value == '1'? 'Unhide successfully' : 'Hidden successfully']);
-        // } catch (\Exception $e) {
+        } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $request->value == '1'? 'Unhide failed' : 'Hidden failed']);
-        // }
+        }
     }
 
     public function dashboardData() {
         $user = User::where(['status' => 1, 'role' => 'user'])->count();
-        $request = Application::all()->count();
+        $request = Application::where('status', 1)->count();
         $resident = Resident::all()->count();
+        $vaccinated = Resident::where('vaccinated', 1)->count();
         $announcement = Announcement::all()->count();
         $dashData = [
             'user' => $user? $user : 0,
             'request' => $request? $request : 0,
             'resident' => $resident? $resident : 0,
+            'vaccinated' => $vaccinated? $vaccinated : 0,
             'announcement' => $announcement? $announcement : 0,
         ];
-        return response()->json(['success' => true, 'data' => $dashData]);
+
+        $doughnutData[] = Resident::where('gender', 'Male')->count();
+        $doughnutData[] = Resident::where('gender', 'Female')->count();
+        $doughnutData[] = Resident::where('age', '>=', 60)->count();
+
+        $puroks = ['Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Purok 5', 'Purok 6', 'Purok 7', 'Purok 8', 'Purok 9', 'Purok 10'];
+
+        $purokData = [];
+        foreach ($puroks as $k => $purok) {
+            $pAll = Resident::where('current_address', 'LIKE', '%'.$purok.'%')->count();
+            $pMale = Resident::where([
+                ['current_address', 'LIKE', '%'.$purok.'%'],
+                ['gender', '=', 'Male']])->count();
+            $pFemale = Resident::where([
+                ['current_address', 'LIKE', '%'.$purok.'%'],
+                ['gender', '=', 'Female']])->count();
+            $pSenior = Resident::where([
+                ['current_address', 'LIKE', '%'.$purok.'%'],
+                ['age', '>=', 60]])->count();
+            $purokData['resident'][$k] = $pAll;
+            $purokData['male'][$k] = $pMale;
+            $purokData['female'][$k] = $pFemale;
+            $purokData['senior'][$k] = $pSenior;
+        }
+        return response()->json(['success' => true, 'data' => $dashData, 'pdata' => $purokData, 'doughnutData' => $doughnutData]);
+    }
+
+    public function sendingSms(Request $request) {
+        $smsContent = $request->content;
+        $phoneNumbers = $request->phoneNumbers;
+
+        $status = json_decode($this->getServerStatus(), true);
+
+        if($status['result']['APIStatus'] == 'ONLINE') {
+            foreach ($phoneNumbers as $key => $value) {
+                $smsapi = $this->sendSMS($value, $smsContent);
+            }
+            return response()->json(['success' => true]);
+        }else{
+            return response()->json(['success' => false]);
+        }
+
+    }
+
+    public function displayOutgoing(Request $request) {
+        $list = $this->listOutgoingSMS();
+        return $list;
+    }
+
+    public function residentListFilter(Request $request) {
+
+            $resident = Resident::with('user')
+                ->whereNotNull('email')
+                ->where(function($query) use ($request) {
+                    if($request->gender) {
+                        $query->whereIn('gender', $request->gender);
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->status) {
+                        $query->whereIn('civil_status', $request->status);
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->bloodType) {
+                        $query->whereIn('blood_type', $request->bloodType);
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->religion) {
+                        $query->whereIn('religion', $request->religion);
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->purok) {
+                        foreach($request->purok as $keyword) {
+                            $query->orWhere('current_address', 'LIKE', '%'.$keyword.'%');
+                        }
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->ageRange) {
+                        $query->whereBetween('age', $request->ageRange);
+                    }
+                })->orderBy('created_at', 'desc')->get();
+            $total = count($resident);
+            $male = 0;
+            $female = 0;
+
+            foreach ($resident as $key => $value) {
+                if($value['gender'] == 'Male') { $male = $male + 1;
+                }else{ $female = $female + 1; }
+            }
+            return response()->json(['resident' => $resident, 'male' => $male, 'female' => $female, 'total' => $total]);
+    }
+
+    public function requestListFilter(Request $request) {
+            if(count($request->dates) == 1) {
+                return response()->json(['success' => false]);
+            }
+            $requestList = Application::with('user')
+                ->whereNotNull('user_id')
+                ->where(function($query) use ($request) {
+                    if($request->name) {
+                        $query->where('firstname', 'LIKE', '%'.$request->name.'%');
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->type) {
+                        $query->whereIn('type', $request->type);
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->status) {
+                        $query->whereIn('status', $request->status);
+                    }
+                })
+                ->where(function($query) use ($request) {
+                    if($request->dates) {
+                        $query->whereBetween('created_at', $request->dates);
+                    }
+                })->orderBy('created_at', 'desc')->get();
+            return response()->json(['success' => true, 'request' => $requestList, 'total' => count($requestList)]);
+    }
+
+    public function residentSearch(Request $request) {
+        $resident = Resident::where('firstname', 'LIKE', '%'.$request->name.'%')->orWhere('phone', 'LIKE', '%'.$request->name.'%')->orderBy('created_at', 'desc')->get();
+        return response()->json($resident, 200);
     }
 
 }

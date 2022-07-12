@@ -9,7 +9,8 @@ class Application extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'created_at' => 'datetime:Y-m-d H:00',
+        // 'created_at' => 'datetime:Y-m-d H:00',
+        'created_at' => 'date:Y-m-d',
         'updated_at' => 'datetime:Y-m-d H:00'
     ];
 

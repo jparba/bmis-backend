@@ -10,7 +10,14 @@ use Illuminate\Http\Request;
 class PublicController extends Controller {
 
     public function getOfficialList() {
-        $official = Official::orderBy('created_at', 'desc')->get();
+        // $official = Official::orderBy('created_at', 'desc')->get();
+        $official = [];
+        $official['capt'] = Official::where('position', 'Barangay Captain')->get();
+        $official['kagawad'] = Official::where('position', 'Kagawad')->get();
+        $official['others'] = Official::where([
+            ['position', '!=', 'Barangay Captain'],
+            ['position', '!=', 'Kagawad']
+        ])->get();
         return response()->json($official, 200);
     }
 

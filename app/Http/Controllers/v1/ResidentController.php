@@ -32,16 +32,17 @@ class ResidentController extends Controller
             $paddress = $request->ppurok.'/'.$request->pstreet.'/'.$request->pcity.'/'.$request->pprovince;
             $data = [
                 'user_id' => Auth::id(),
+                'vaccinated' => $request->vaccinated,
                 'firstname' => $request->firstname,
                 'middlename' => $request->middlename,
                 'lastname' => $request->lastname,
+                'name_extension' => $request->name_extension,
                 'phone' => $request->phone,
                 'email' => $request->email,
                 'dob' => $request->bdate,
+                'age'=> is_nan((int)$request->age) || (int)$request->age < 0? 0 : (int)$request->age,
                 'pob' => $request->pob,
                 'gender' => $request->gender,
-                'weight'=> $request->weight,
-                'height'=> $request->height,
                 'religion' => $request->religion,
                 'blood_type' => $request->bloodtype,
                 'occupation' => $request->occupation,
@@ -52,7 +53,8 @@ class ResidentController extends Controller
                 'tin'=> $request->tin,
                 'pagibig'=> $request->pagibig,
                 'sss'=> $request->sss,
-                'philhealth'=> $request->philhealth
+                'philhealth'=> $request->philhealth,
+                'pic'=> $request->pic
             ];
 
             $resident = Resident::where('user_id', Auth::id())->first();
@@ -122,5 +124,10 @@ class ResidentController extends Controller
     public function destroy($id)
     {
         //
+    }
+
+    public function getNameList() {
+        $resident = Resident::all()->pluck('firstname', 'lastname');
+        return response()->json($resident, 200);
     }
 }
